@@ -17,6 +17,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Q3Movement
 {
@@ -88,6 +89,10 @@ namespace Q3Movement
         private InputAction restart;
         private InputAction quit;
         
+        //UI elements
+        public RawImage Damage1;
+        public RawImage Damage2;
+        public RawImage Damage3;
 
         private void Start()
         {
@@ -99,7 +104,7 @@ namespace Q3Movement
                 m_Camera = Camera.main;
 
             m_CamTran = m_Camera.transform;
-
+            playerInput = GetComponent<PlayerInput>();
             playerInput.currentActionMap.Enable();
             
             restart = playerInput.currentActionMap.FindAction("Restart");
@@ -129,10 +134,34 @@ namespace Q3Movement
             StartCoroutine(Dash());
         }
 
+        //changes the ui to reflect how much damage the player is doing based on their current speed
+        public void HandleUI()
+        {
+            if(Speed <= 7)
+            {
+                Damage2.enabled = false;
+                Damage3.enabled = false;
+                Damage1.enabled = true;
+            }
+            if (Speed > 7)
+            {
+                Damage2.enabled = true;
+                Damage3.enabled = false;
+                Damage1.enabled = false;
+            }
+            if (Speed >= 12)
+            {
+                Damage2.enabled = false;
+                Damage3.enabled = true;
+                Damage1.enabled = false;
+            }
+        }
 
 
         private void Update()
         {
+            Debug.Log(Speed);
+            HandleUI();
             m_MoveInput = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical"));
            
             QueueJump();
