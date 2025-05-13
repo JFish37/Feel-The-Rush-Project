@@ -17,14 +17,17 @@ public class MainMenu : MonoBehaviour
         {
             SceneManager.LoadScene(1);
         }
-
-    public void Level2()
+    public void Level1()
     {
         SceneManager.LoadScene(2);
     }
-    public void Level3()
+    public void Level2()
     {
         SceneManager.LoadScene(3);
+    }
+    public void Level3()
+    {
+        SceneManager.LoadScene(4);
     }
 
 }

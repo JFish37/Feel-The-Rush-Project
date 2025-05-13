@@ -5,6 +5,15 @@ TagManager:
   serializedVersion: 2
   tags:
   - Collectible
+  - Health
+  - PlayerBullet
+  - EnemyBullet
+  - Goal
+  - Tutorial1
+  - Tutorial2
+  - Tutorial3
+  - Tutorial4
+  - Tutorial5
   layers:
   - Default
   - TransparentFX
@@ -12,8 +21,8 @@ TagManager:
   - 
   - Water
   - UI
-  - 
-  - 
+  - Floor
+  - Player
   - 
   - 
   - 

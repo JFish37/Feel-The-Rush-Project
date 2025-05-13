@@ -1,4 +1,11 @@
-﻿using UnityEngine;
+﻿/**
+// File Name : PlayerController.cs
+// Author : Jack P. Fisher
+// Creation Date : Mar 25, 2025
+//
+// Brief Description : This script controls Mouse movement and aiming.
+**/
+using UnityEngine;
 
 public class MouseLook : MonoBehaviour
 {

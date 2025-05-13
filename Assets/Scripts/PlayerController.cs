@@ -3,20 +3,19 @@
 // Author : Jack P. Fisher
 // Creation Date : March 24, 2025
 //
-// Brief Description : This script has the code for the player movement, dash, ground slam, jump, and turns the character with the camera. 
-A lot of things need changed still like the controls need to be refined and I need to figure out if I want the ground slam on spacebar or a different button.
-I followed a guide to recreate the movement of Quake, an arena shooter, in my game which will also be an arena shooter. 
-I don't really like the movement sytstem though so I may go back and change it into something else when I feel better 
-(I have been sick after catching something from my partner Autumn who I visited on Thursday). 
+// Brief Description : This script has the code for the player movement, dash, ground slam, jump, and turns the character with the camera. It also allows the player to shoot
+// and controls the UI elements corresponding to player health and damage.
 **/
 using System;
 using System.Collections;
+using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
 using UnityEngine.SceneManagement;
+using UnityEngine.SocialPlatforms.Impl;
 using UnityEngine.UI;
 
 namespace Q3Movement
@@ -40,6 +39,14 @@ namespace Q3Movement
             }
         }
 
+        //sound effect for firing
+        public AudioClip GunSound;
+
+        
+
+
+        private Vector3 addedVelocity;
+
         [Header("Aiming")]
         [SerializeField] private Camera m_Camera;
         [SerializeField] private MouseLook m_MouseLook = new MouseLook();
@@ -60,11 +67,24 @@ namespace Q3Movement
         private bool CanDash;
         private float SlamCooldown;
 
+        //variables for pausing and unpausing
+        public GameObject pauseMenu;
+        private bool isPaused;
+
+        //tutorial popups
+        public GameObject Tutorial1;
+        public GameObject Tutorial2;
+        public GameObject Tutorial3;
+        public GameObject Tutorial4;
+        public GameObject Tutorial5;
 
         //move direction for the dash input to make you dash in the direction you are moving
         private Vector3 moveDirection;
-        
 
+        //variables for firing the gun
+        public Transform BulletSpawnPoint;
+        public GameObject BulletPrefab;
+        public float bulletSpeed;
 
         /// Returns player's current speed. This will be useful when I make a UI element that tracks player speed later. 
         public float Speed { get { return playerCharacter.velocity.magnitude; } }
@@ -76,6 +96,7 @@ namespace Q3Movement
         // Used to queue the next jump just before hitting the ground.
         private bool jumpQueued = false;
 
+
         // Used to display real time friction values.
         private float m_PlayerFriction = 0;
 
@@ -83,8 +104,11 @@ namespace Q3Movement
         private Transform playerTransform;
         private Transform m_CamTran;
 
-
-        public PlayerInput playerInput;
+        //booleans to make enemy damage change work
+        public bool isDamage1;
+        public bool isDamage2;
+        public bool isDamage3;
+        
         private InputAction dash;
         private InputAction restart;
         private InputAction quit;
@@ -94,8 +118,28 @@ namespace Q3Movement
         public RawImage Damage2;
         public RawImage Damage3;
 
+        //Health and text to display health
+        private int Health;
+        public TMP_Text healthText;
+
+        //used to set firerate
+        private bool canFire;
+
+        private void Awake()
+        {
+            isDamage1 = true;
+            isDamage2 = false;
+            isDamage3 = false;
+
+            isPaused = false;
+        }
         private void Start()
         {
+            isDamage1 = true;
+            isDamage2 = false;
+            isDamage3 = false;
+            Health = 100;
+            healthText.text = "Health: " + Health.ToString();
             CanDash = true;
             playerTransform = transform;
             playerCharacter = GetComponent<CharacterController>();
@@ -104,35 +148,14 @@ namespace Q3Movement
                 m_Camera = Camera.main;
 
             m_CamTran = m_Camera.transform;
-            playerInput = GetComponent<PlayerInput>();
-            playerInput.currentActionMap.Enable();
-            
-            restart = playerInput.currentActionMap.FindAction("Restart");
-            quit = playerInput.currentActionMap.FindAction("Quit");
-            dash = playerInput.currentActionMap.FindAction("Dash");
-            
 
-            dash.started += Dash_started;
-            restart.started += Restart_started;
-            quit.started += Quit_started;
+            isPaused = false;
+            canFire = true;
+
 
         }
 
-        private void Quit_started(InputAction.CallbackContext context)
-        {
-            SceneManager.LoadScene(0);
-        }
-
-        private void Restart_started(InputAction.CallbackContext context)
-        {
-            Scene currentScene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(currentScene.buildIndex);
-        }
-
-        private void Dash_started(InputAction.CallbackContext context)
-        {
-            StartCoroutine(Dash());
-        }
+        
 
         //changes the ui to reflect how much damage the player is doing based on their current speed
         public void HandleUI()
@@ -142,18 +165,31 @@ namespace Q3Movement
                 Damage2.enabled = false;
                 Damage3.enabled = false;
                 Damage1.enabled = true;
+
+                //I need these because otherwise the enemy damage changing breaks and this is my solution
+                isDamage1 = true;
+                isDamage2 = false;
+                isDamage3 = false;
             }
-            if (Speed > 7)
+            if (Speed >= 8)
             {
                 Damage2.enabled = true;
                 Damage3.enabled = false;
                 Damage1.enabled = false;
+
+                isDamage1 = false;
+                isDamage2 = true;
+                isDamage3 = false;
             }
             if (Speed >= 12)
             {
                 Damage2.enabled = false;
                 Damage3.enabled = true;
                 Damage1.enabled = false;
+
+                isDamage1 = false;
+                isDamage2 = false;
+                isDamage3 = true;
             }
         }
 
@@ -181,32 +217,86 @@ namespace Q3Movement
             // Move the character.
             playerCharacter.Move(playerVelocity * Time.deltaTime);
 
-            // I am using the old input system because I am not quite sure what I want the controls to be yet, and I am sick and short on time. This will be updated later.
+            // I am using the old input system because the new one won't work, and I can't figure out how to fix it
             
-            
+            //Ground Slam
             if (jumpQueued && Input.GetKey(KeyCode.Space))
             {
                 StartCoroutine(Slam());
+                
             }
-            
-        }
 
-        //this function allows the player to slam back down to the ground after jumping
-        IEnumerator Slam()
-        {
-            playerVelocity = new Vector3(0f, transform.up.y * -dashSpeed, 0f);
-            yield return new WaitForSeconds(SlamCooldown);
+            //Restart
+            if (Input.GetKey(KeyCode.R))
+            {
+                Scene currentScene = SceneManager.GetActiveScene();
+                SceneManager.LoadScene(currentScene.buildIndex);
+            }
+            //Quit to main menu
+            if (Input.GetKey(KeyCode.Q))
+            {
+                SceneManager.LoadScene(0);
+            }
+            //Dash
+            if (Input.GetKey(KeyCode.LeftShift))
+            {
+                StartCoroutine(Dash());
+            }
+            //Shoot Gun
+            if (Input.GetKeyDown(KeyCode.Mouse0) && canFire)
+            {
+                AudioSource.PlayClipAtPoint(GunSound, transform.position);
+                var Bullet = Instantiate(BulletPrefab, BulletSpawnPoint.position, BulletSpawnPoint.rotation);
+                Bullet.GetComponent<Rigidbody>().velocity = BulletSpawnPoint.forward * bulletSpeed;
+                canFire = false;
 
+                
+            }
+            if (canFire == false)
+            {
+                StartCoroutine(FireRate());
+            }
+            //Pause menu
+            if (Input.GetKeyDown(KeyCode.P) && isPaused == false)
+            {
+                
+                    pauseMenu.SetActive(true);
+                    isPaused = true;
+                    Time.timeScale = 0;
+                
+                
+            }
+            if (Input.GetKeyDown(KeyCode.O) && isPaused == true)
+            {
+
+                pauseMenu.SetActive(false);
+                isPaused = false;
+                Time.timeScale = 1;
+
+
+            }
         }
 
         
 
-       
-    
+        //this function allows the player to slam back down to the ground after jumping
+        IEnumerator Slam()
+        {
+            addedVelocity = new Vector3(0f, transform.up.y * -dashSpeed, 0f);
+            CanDash = true;
+            playerVelocity = playerVelocity + addedVelocity;
+            yield return new WaitForSeconds(SlamCooldown);
+
+        }
 
 
-    //this function launches the player forward and then starts a cooldown to make the player wait before dashing
-    IEnumerator Dash()
+        
+
+
+
+
+        //this function launches the player forward and then starts a cooldown to make the player wait before dashing
+        IEnumerator Dash()
         {
             float startTime = Time.time;
 
@@ -232,17 +322,81 @@ namespace Q3Movement
 
             
         }
-        //for now this just loads the win scene since the checklist for the alpha says the player needs an objective.
-        //In the future this will progress the player to the next level.
+        //used to stop the player from firing the gun constantly
+        IEnumerator FireRate()
+        {
+            yield return new WaitForSeconds(0.9f);
+            canFire = true;
+        }
+        //Triggers for taking damage, gaining health, and progressing to the next level
         private void OnTriggerEnter(Collider collision)
         {
-            if (collision.tag == "Collectible")
+            if (collision.tag == "Goal")
             {
-                SceneManager.LoadScene(2);
+                Debug.Log("I touched the goal");
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1); 
             }
+            if (collision.tag == "Health")
+            {
+                Health += 50;
+                healthText.text = "Health: " + Health.ToString();
+            }
+            if(collision.tag == "EnemyBullet")
+            {
+                
+                Health -= 10;
+                healthText.text = "Health: " + Health.ToString();
+                if (Health <= 0)
+                {
+                    Scene currentScene = SceneManager.GetActiveScene();
+                    SceneManager.LoadScene(currentScene.buildIndex);
+                }
+            }
+            if (collision.tag == "Tutorial1")
+            {
+                Tutorial1.SetActive(true);
+                
+                StartCoroutine(RemoveTutorials(10f));
+            }
+            if (collision.tag == "Tutorial2")
+            {
+                Tutorial2.SetActive(true);
+                
+                StartCoroutine(RemoveTutorials(6f));
+            }
+            if (collision.tag == "Tutorial3")
+            {
+                Tutorial3.SetActive(true);
+                
+                StartCoroutine(RemoveTutorials(8f));
+            }
+            if (collision.tag == "Tutorial4")
+            {
+                Tutorial4.SetActive(true);
+                
+                StartCoroutine(RemoveTutorials(8f));
+            }
+            if (collision.tag == "Tutorial5")
+            {
+                Tutorial5.SetActive(true);
+                
+                StartCoroutine(RemoveTutorials(6f));
+            }
+
         }
-        // Queues the next jump.
-        private void QueueJump()
+    //tutorials will disappear after a few seconds
+    private IEnumerator RemoveTutorials(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+            
+            Tutorial1.SetActive(false);
+            Tutorial2.SetActive(false);
+            Tutorial3.SetActive(false);
+            Tutorial4.SetActive(false);
+            Tutorial5.SetActive(false);
+    }
+    // Queues the next jump.
+    private void QueueJump()
         {
             if (queuingJump)
             {
